@@ -1,0 +1,13 @@
+yaml
+# Railway Configuration for Tervux WhatsApp Bot
+version: 3
+
+build:
+  builder: NIXPACKS
+  buildCommand: npm install && npm install @whiskeysockets/baileys
+
+deploy:
+  startCommand: npm start
+  restartPolicyType: ON_FAILURE
+  maxRestartCount: 5
+  

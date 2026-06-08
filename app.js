@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { whatsappService } from "./services/whatsappService.js";
 import { getCachedConfig, updateConfig, invalidateConfigCache } from "./services/configService.js";
+import { requestPairingCodeFromWeb } from "./services/whatsappClient.js"; // Tumeimport hii function ya unyama
 
 const app = express();
 
@@ -33,6 +34,31 @@ app.get("/api/status", (req, res) => {
             alwaysRecording: config.alwaysRecording
         }
     });
+});
+
+// 🔥 ENDPOINT MPYA: Inapokea namba kutoka Dashboard na kurudisha Pairing Code
+app.post("/api/pairing-code", async (req, res) => {
+    const { phone } = req.body;
+
+    if (!phone) {
+        return res.status(400).json({ error: "Tafadhali weka namba ya simu sahihi" });
+    }
+
+    try {
+        console.log(`📡 Dashboard imeomba Pairing Code kwa ajili ya namba: ${phone}`);
+        
+        // Tunavuta kodi kutoka kwenye Baileys direct!
+        const code = await requestPairingCodeFromWeb(phone);
+        
+        // Pia tunasave namba kwenye config.json ili bot iitambue baadae
+        updateConfig({ phone: phone.replace(/[^0-9]/g, '') });
+        invalidateConfigCache();
+
+        res.json({ success: true, code: code });
+    } catch (error) {
+        console.error("Pairing code error:", error);
+        res.status(500).json({ error: error.message || "Imeshindikana kupata Pairing Code. Jaribu tena." });
+    }
 });
 
 // Update settings
@@ -81,7 +107,8 @@ app.post("/api/restart", async (req, res) => {
 app.post("/api/logout", async (req, res) => {
     try {
         await whatsappService.logout();
-        res.json({ success: true, message: "Logged out. Restart to scan new QR code." });
+        // Tumesafisha hii meseji ya chini iondoe mambo ya QR code
+        res.json({ success: true, message: "Umelogout kikamilifu. Weka namba mpya kwenye Dashboard kupata Pairing Code." });
     } catch (error) {
         console.error("Logout error:", error);
         res.status(500).json({ error: "Failed to logout" });

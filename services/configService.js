@@ -45,8 +45,8 @@ export function loadConfig() {
     return {
         ...DEFAULT_CONFIG,
         ...fileConfig,
-        phone: process.env.PHONE || fileConfig.phone || DEFAULT_CONFIG.phone,
-        ownerNumber: process.env.OWNER_NUMBER || fileConfig.ownerNumber || DEFAULT_CONFIG.ownerNumber,
+                phone: fileConfig.phone || DEFAULT_CONFIG.phone,
+        ownerNumber: fileConfig.ownerNumber || DEFAULT_CONFIG.ownerNumber,
         prefix: process.env.PREFIX || fileConfig.prefix || DEFAULT_CONFIG.prefix
     };
 }

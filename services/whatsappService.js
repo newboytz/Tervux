@@ -16,7 +16,7 @@ export const whatsappService = {
             if (hasSession) {
                 console.log("📂 Found existing session. Attempting to resume...");
             } else {
-                console.log("📱 No session found. Scan QR code to connect.");
+                console.log("📱 No session found. darshbord.");
             }
 
             // Create client

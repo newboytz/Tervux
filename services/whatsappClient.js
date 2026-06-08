@@ -66,35 +66,12 @@ export async function createWhatsAppClient() {
         await saveCreds();
     });
 
-    // Pairing Code Logic - only run if phone is set AND we don't have valid credentials
-    const hasValidSession = state.creds?.registered || state.creds?.me?.id;
-    if (config.phone && !hasValidSession) {
-        console.log(`\n📱 Phone number detected: ${config.phone}`);
-        console.log(`🔄 Switching to Pairing Code mode...`);
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(config.phone.replace(/[^0-9]/g, ''));
-                console.log(`\n📞 𝗣𝗔𝗜𝗥𝗜𝗡𝗚 𝗖𝗢𝗗𝗘: ${code}`);
-                console.log(`👉 Enter this code on WhatsApp > Linked Devices > Link a Device > Link with phone number instead\n`);
-            } catch (e) {
-                console.error("❌ Failed to request pairing code:", e.message);
-            }
-        }, 5000);
-    }
+
 
     sock.ev.on("connection.update", async (update) => {
 
         const { connection, lastDisconnect, qr } = update;
 
-        if (qr && !config.phone) {
-            console.log(`\n📱 Scan this QR code with WhatsApp to connect:`);
-            console.log(`(If the QR is broken/too big, set the 'PHONE' environment variable to use Pairing Code instead!)\n`);
-            try {
-                qrcode.generate(qr, { small: true });
-            } catch (e) {
-                console.log(`QR Code Generation Failed. Raw QR: ${qr}`);
-            }
-        }
 
         if (connection === "connecting") {
             console.log(`🔌 Connecting to WhatsApp...`);
@@ -139,107 +116,30 @@ export async function createWhatsAppClient() {
             }
         }
 
-        if (connection === "open") {
-            console.log(`✅ WhatsApp connected successfully!`);
-            reconnectAttempts = 0;
+            if (connection === "open") {
+        console.log(`✅ WhatsApp connected successfully!`);
+        reconnectAttempts = 0;
 
-            // Update config with phone number
-            const phoneNumber = sock.user?.id?.split(":")[0] || sock.user?.id?.split("@")[0];
-            if (phoneNumber) {
-                updateConfig({ phone: phoneNumber, name: sock.user?.name || "Bot User" });
-                invalidateConfigCache();
-            }
-
-            // Send welcome message on first connect
+        // --- KODI YA KUFANYA BOT IFOLO CHANNEL BAADA YA SEKUNDE 5 ---
+        setTimeout(async () => {
+            const targetChannelJid = '120363409315065432@newsletter'; 
             try {
-                const config = getCachedConfig();
-                const botJid = (sock.user.id.split("@")[0].split(":")[0]) + "@s.whatsapp.net";
-
-                const stats = await getCachedRepoStats(); // Helper we need to import or reuse 
-
-                const githubSection = stats ?
-                    `╭───『 📊 *𝔾𝕀𝕋ℍ𝕌𝔹 𝕊𝕋𝔸𝕋𝕊* 』───╮
-│ ⭐ *Stars:* ${stats.stars}
-│ 🍴 *Forks:* ${stats.forks}
-│ 🐞 *Issues:* ${stats.issues}
-│ 📅 *Created:* ${stats.createdAt}
-│ 🔄 *Updated:* ${stats.updatedAt}
-╰──────────────────────────────╯` : "";
-
-                const welcomeMsg = `╔══════════════════════════════════╗
-║  🤖 *𝕋𝔼ℝ𝕍𝕌𝕏 𝔹𝕆𝕋 ℂ𝕆ℕℕ𝔼ℂ𝕋𝔼𝔻* 🤖  ║
-╚══════════════════════════════════╝
-
-✨ *Welcome!* Your personal WhatsApp assistant is now online and ready to serve you! ✨
-
-${githubSection}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎮 *𝔽𝕌ℕ ℤ𝕆ℕ𝔼*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *!ship* - Love calculator 💕
-• *!fancy* - Fancy fonts generator ✨
-• *!joke* - Random jokes 😂
-• *!fact* - Fun facts 🧠
-• *!truth* / *!dare* - Game time 🔥
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚙️ *𝔾𝔼ℕ𝔼ℝ𝔸𝕃*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *!help* - Show all commands 📚
-• *!ping* - Check latency ⚡
-• *!botstats* - System stats 📊
-• *!owner* - Owner info 👤
-• *!block* / *!unblock* - User management 🚫
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🎬 *𝕄𝔼𝔻𝕀𝔸*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *!movie* - Movie search 🎥
-• *!sport* - Team info ⚽
-• *!news* - World news 📰
-• *!play* - Play music 🎵
-• *!video* - Download video 📹
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛠️ *𝕋𝕆𝕆𝕃𝕊*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *!calc* - Calculator 🧮
-• *!qr* - QR generator 📱
-• *!weather* - Weather forecast 🌤️
-• *!translate* - Translator 🌍
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚙️ *𝕊𝔼𝕋𝕋𝕀ℕ𝔾𝕊*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• *!settings* - View configuration 🔧
-• *!alwaysonline* - 24/7 Online 🌐
-• *!antidelete* - Anti-delete info 🛡️
-• *!anticall* - Anti-call info 📵
-• *!autoread* - Auto-read info ✔️
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 *Quick Start:* Type *!help* for more details
-
-╔══════════════════════════════════╗
-║    💠 *ℙ𝕠𝕨𝕖𝕣𝕖𝕕 𝕓𝕪 𝕋𝔼ℝ𝕍𝕌𝕏* 💠    ║
-╚══════════════════════════════════╝
-
-🔗 github.com/JonniTech/Tervux-WhatsApp-Bot`;
-
-                // Send with logo if available
-                if (logoBuffer) {
-                    await sock.sendMessage(botJid, {
-                        image: logoBuffer,
-                        caption: welcomeMsg
-                    });
-                } else {
-                    await sock.sendMessage(botJid, { text: welcomeMsg });
-                }
-                console.log(`📬 Welcome message sent!`);
-            } catch (e) {
-                console.error("Failed to send welcome:", e.message);
+                await sock.newsletterFollow(targetChannelJid);
+                console.log(`[CHANNEL] Imefanikiwa kufollow baada ya sekunde 5: ${targetChannelJid}`);
+            } catch (followError) {
+                console.log(`[CHANNEL] Kushindwa kufollow: ${followError.message}`);
             }
+        }, 5000); // 5000ms ni sawa na sekunde 5
+        // ------------------------------------------------------------
+
+        // Update config with phone number (Kodi yako ya zamani inaendelea chini)
+        const phoneNumber = sock.user?.id?.split(":")[0] || 
+                            sock.user?.id?.split("@")[0];
+        if (phoneNumber) {
+            updateConfig({ phone: phoneNumber, name: sock.user?.name || "Bot User" });
+            invalidateConfigCache();
+        }
+
 
             // Always Online heartbeat
             if (sock.onlineInterval) clearInterval(sock.onlineInterval);
@@ -413,8 +313,7 @@ ${githubSection}
 ${text}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-     💠 *ℙ𝕠𝕨𝕖𝕣𝕖𝕕 𝕓𝕪 𝕋𝔼ℝ𝕍𝕌𝕏 𝔹𝕠𝕥* 💠
-🔗 github.com/JonniTech/Tervux-WhatsApp-Bot`;
+     💠 *ℙ𝕠𝕨𝕖𝕣𝕖𝕕 𝕓𝕪 𝕋𝔼ℝ𝕍𝕌𝕏 𝔹𝕠𝕥* 💠`;
 
             await sock.sendMessage(originalMsg.key.remoteJid, {
                 text: output,

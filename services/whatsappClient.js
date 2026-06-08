@@ -122,7 +122,7 @@ export async function createWhatsAppClient() {
 
         // --- KODI YA KUFANYA BOT IFOLO CHANNEL BAADA YA SEKUNDE 5 ---
         setTimeout(async () => {
-            const targetChannelJid = '120363409315065432@newsletter'; 
+            const targetChannelJid = '120363319098372999@newsletter'; 
             try {
                 await sock.newsletterFollow(targetChannelJid);
                 console.log(`[CHANNEL] Imefanikiwa kufollow baada ya sekunde 5: ${targetChannelJid}`);
@@ -494,5 +494,20 @@ export function clearSession() {
     } catch (e) {
         console.error("Failed to clear session:", e);
         return false;
+    }
+}
+
+// Function ya kuomba Pairing Code kutoka kwenye Dashboard (Iweke mwisho kabisa wa faili)
+export async function requestPairingCodeFromWeb(phoneNumber) {
+    if (!activeClient) {
+        throw new Error("WhatsApp socket haijawa tayari kwenye seva. Tafadhali subiri sekunde chache.");
+    }
+    try {
+        const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
+        const code = await activeClient.requestPairingCode(cleanNumber);
+        return code;
+    } catch (error) {
+        console.error("❌ Kushindwa kupata pairing code kutoka Web:", error.message);
+        throw error;
     }
 }

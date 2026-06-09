@@ -30,15 +30,19 @@ setInterval(() => {
     }
 }, 30000);
 
-// Single client instance (single-user bot)
-let activeClient = null;
-let reconnectAttempts = 0;
+// 📦 MULTI-ACCOUNT: Duka la kuhifadhia sock za wateja wote kwa majina yao
+export const activeClients = new Map();
+// Tunatunza pia majaribio ya kureconnect kwa kila jina la mteja
+const reconnectAttemptsMap = new Map();
 const MAX_RECONNECT_ATTEMPTS = 10;
 
-export async function createWhatsAppClient() {
+export async function createWhatsAppClient(accountName, phoneNumber = null) {
+    // 🛠️ Dynamic Path: Kila mteja anapata folda lake ndani ya auth_info/session_jina
+    const sessionPath = join(process.cwd(), "auth_info", `session_${accountName}`);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+    
+    // Kila mteja atakuwa na config yake ndani ya folda lake baadae, kwa sasa tunavuta kuu
     const config = getCachedConfig();
-    // Use Baileys built-in file-based auth
-    const { state, saveCreds } = await useMultiFileAuthState(AUTH_INFO_PATH);
 
     console.log(`🔌 Creating WhatsApp socket...`);
 
@@ -90,31 +94,30 @@ export async function createWhatsAppClient() {
 
             console.log(`❌ Connection closed. Code: ${statusCode}, Error: ${errorMessage}`);
 
-            if (isLoggedOut) {
-                console.log(`🔓 Logged out! Clearing session...`);
+                      if (isLoggedOut) {
+                console.log(`🔓 Member '${accountName}' logged out! Clearing session...`);
                 try {
-                    rmSync(AUTH_INFO_PATH, { recursive: true, force: true });
-                    mkdirSync(AUTH_INFO_PATH, { recursive: true });
+                    rmSync(sessionPath, { recursive: true, force: true });
                 } catch (e) {
                     console.error("Failed to clear auth:", e);
                 }
-                console.log(`📱 Please restart the bot and scan QR code again.`);
-                reconnectAttempts = MAX_RECONNECT_ATTEMPTS; // Stop reconnection
+                activeClients.delete(accountName);
+                reconnectAttemptsMap.delete(accountName);
             } else if (isConflict) {
-                console.log(`⚠️ Session active on another device.`);
-            } else if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), 60000);
-                console.log(`🔄 Reconnecting in ${delay / 1000}s (Attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
-                setTimeout(() => {
-                    createWhatsAppClient().then(client => {
-                        activeClient = client;
-                    });
-                }, delay);
+                console.log(`⚠️ Session active on another device for ${accountName}.`);
             } else {
-                console.log(`❌ Max reconnection attempts reached. Please restart manually.`);
+                let attempts = reconnectAttemptsMap.get(accountName) || 0;
+                if (attempts < MAX_RECONNECT_ATTEMPTS) {
+                    attempts++;
+                    reconnectAttemptsMap.set(accountName, attempts);
+                    const delay = Math.min(5000 * Math.pow(1.5, attempts), 60000);
+                    console.log(`🔄 [${accountName}] Reconnecting in ${delay / 1000}s...`);
+                    setTimeout(() => {
+                        createWhatsAppClient(accountName);
+                    }, delay);
+                }
             }
-        }
+                    
 
             if (connection === "open") {
         console.log(`✅ WhatsApp connected successfully!`);
@@ -477,37 +480,45 @@ github.com/JonniTech/Tervux-WhatsApp-Bot
         }
     });
 
-    activeClient = sock;
+        // ✅ Inamhifadhi huyu mteja na socket yake kwa jina lake la kipekee
+    activeClients.set(accountName, sock);
     return sock;
 }
 
-export function getClient() {
-    return activeClient;
+
+// Function ya kuvuta client ya mteja maalum
+export function getClient(accountName) {
+    return activeClients.get(accountName) || null;
 }
 
-export function clearSession() {
-    try {
-        rmSync(AUTH_INFO_PATH, { recursive: true, force: true });
-        mkdirSync(AUTH_INFO_PATH, { recursive: true });
-        console.log(`🧹 Session cleared successfully!`);
-        return true;
-    } catch (e) {
-        console.error("Failed to clear session:", e);
-        return false;
+// Zima na uondoe kabisa socket ya mteja aliyelogout
+export async function closeClientSession(accountName) {
+    const sock = activeClients.get(accountName);
+    if (sock) {
+        try {
+            sock.ws.close();
+        } catch (e) {}
+        activeClients.delete(accountName);
+        reconnectAttemptsMap.delete(accountName);
     }
 }
 
-// Function ya kuomba Pairing Code kutoka kwenye Dashboard (Iweke mwisho kabisa wa faili)
-export async function requestPairingCodeFromWeb(phoneNumber) {
-    if (!activeClient) {
-        throw new Error("WhatsApp socket haijawa tayari kwenye seva. Tafadhali subiri sekunde chache.");
-    }
+// 🔥 FUNCTION YA UNYAMA: Inatumiwa na app.js kuwasha socket mpya na kuvuta Pairing Code
+export async function requestPairingCodeFromWeb(accountName, phoneNumber) {
+    // 1. Tunamwanzishia kwanza socket yake mpya kwa jina lake
+    const sock = await createWhatsAppClient(accountName, phoneNumber);
+    
+    // 2. Subiri sekunde 3 socket ijiandae
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
     try {
         const cleanNumber = phoneNumber.replace(/[^0-9]/g, '');
-        const code = await activeClient.requestPairingCode(cleanNumber);
+        // 3. Baileys inaomba kodi kwa namba ya huyu mteja husika direct!
+        const code = await sock.requestPairingCode(cleanNumber);
         return code;
     } catch (error) {
-        console.error("❌ Kushindwa kupata pairing code kutoka Web:", error.message);
+        console.error(`❌ Kushindwa kupata pairing code kwa ${accountName}:`, error.message);
         throw error;
     }
 }
+

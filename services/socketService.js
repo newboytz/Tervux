@@ -5,7 +5,7 @@ let io;
 const eventBus = new EventEmitter();
 
 export const initSocket = async (server) => {
-    console.log("🔌 Initializing Socket.io...");
+    console.log("🔌 Initializing Socket.io for Multi-Account...");
 
     const allowedOrigins = process.env.CORS_ORIGINS
         ? process.env.CORS_ORIGINS.split(",").map(o => o.trim())
@@ -19,16 +19,27 @@ export const initSocket = async (server) => {
     });
 
     io.on("connection", (socket) => {
-        console.log("📡 Client connected to Socket.io");
+        console.log("📡 Client connected to Socket.io:", socket.id);
+
+        // 🔥 UNYAMA WA KWANZA: Dashboard inajiunga kwenye chumba cha akaunti husika
+        socket.on("join_account", (accountName) => {
+            if (accountName) {
+                socket.join(accountName);
+                console.log(`🚪 Client ${socket.id} joined room: [${accountName}]`);
+            }
+        });
 
         socket.on("disconnect", () => {
-            console.log("📡 Client disconnected");
+            console.log("📡 Client disconnected:", socket.id);
         });
     });
 
-    // Emit updates to connected clients
-    eventBus.on("bot_update", (data) => {
-        io.emit("bot_update", data);
+    // Subiri updates kutoka kwa bot maalum
+    eventBus.on("bot_update", ({ accountName, event, data }) => {
+        if (io && accountName) {
+            // 🔥 UNYAMA WA PILI: Inatuma updates kwa watu waliofungua akaunti hiyo tu!
+            io.to(accountName).emit(event, data);
+        }
     });
 
     return io;
@@ -39,8 +50,13 @@ export const getIO = () => {
     return io;
 };
 
-export const emitUpdate = (event, data) => {
-    if (io) io.emit(event, data);
+/**
+ * Emit update kwa akaunti maalum pekee kuzuia mwingiliano
+ */
+export const emitUpdate = (accountName, event, data) => {
+    if (io && accountName) {
+        io.to(accountName).emit(event, data);
+    }
 };
 
 export { eventBus };

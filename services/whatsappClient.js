@@ -5,7 +5,6 @@ import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
 import { commands } from "../commands/index.js";
 import { getCachedConfig, updateConfig, invalidateConfigCache } from "./configService.js";
-import { getRepoStats as getCachedRepoStats } from "../utils/githubStats.js";
 
 export const messageCache = new Map();
 

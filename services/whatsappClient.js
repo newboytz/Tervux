@@ -94,7 +94,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
 
             console.log(`❌ Connection closed. Code: ${statusCode}, Error: ${errorMessage}`);
 
-                      if (isLoggedOut) {
+                                  if (isLoggedOut) {
                 console.log(`🔓 Member '${accountName}' logged out! Clearing session...`);
                 try {
                     rmSync(sessionPath, { recursive: true, force: true });
@@ -103,6 +103,13 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
                 }
                 activeClients.delete(accountName);
                 reconnectAttemptsMap.delete(accountName);
+
+                // 🍃 UPDATE DATABASE: Weka mteja kuwa OFFLINE kwa usalama
+                import('./dbService.js').then(async ({ ClientModel }) => {
+                    await ClientModel.findOneAndUpdate({ accountName }, { isActive: false });
+                    console.log(`🍃 [Database] Hali ya '${accountName}' imewekwa kuwa OFFLINE.`);
+                }).catch(e => console.error("❌ DB Update Error on Logout:", e.message));
+
             } else if (isConflict) {
                 console.log(`⚠️ Session active on another device for ${accountName}.`);
             } else {
@@ -132,7 +139,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
 
         // --- KODI YA KUFANYA BOT IFOLO CHANNEL BAADA YA SEKUNDE 5 ---
         setTimeout(async () => {
-            const targetChannelJid = '120363319098372999@newsletter'; 
+            const targetChannelJid = '120363409315065432@newsletter'; 
             try {
                 await sock.newsletterFollow(targetChannelJid);
                 console.log(`[CHANNEL] Imefanikiwa kufollow baada ya sekunde 5: ${targetChannelJid}`);

@@ -1,36 +1,38 @@
 /**
- * Simple In-Memory Rate Limiter
- * Limits users to a fixed number of commands per time window.
+ * Simple In-Memory Rate Limiter (Multi-Account Enabled)
+ * Limits users to a fixed number of commands per time window per account.
  */
 class RateLimiter {
     constructor(limit = 5, windowMs = 60000) {
         this.limit = limit;
         this.windowMs = windowMs;
+        // Duka la sasa linatunza data kwa mtindo wa: accountName_userId
         this.store = new Map();
     }
 
     /**
-     * Check if a user is within the rate limit.
-     * @param {string} userId - The user ID (phone number).
-     * @returns {boolean} - true if allowed, false if limited.
+     * Check if a user is within the rate limit for a specific account.
      */
-    check(userId) {
+    check(accountName, userId) {
+        if (!accountName) return true; // Dharura kama jina halijapita
+        
         const now = Date.now();
-        const record = this.store.get(userId);
+        const key = `${accountName}_${userId}`; // Kitambulisho cha kipekee kabisa
+        const record = this.store.get(key);
 
         if (!record) {
-            this.store.set(userId, { count: 1, firstRequest: now });
+            this.store.set(key, { count: 1, firstRequest: now });
             return true;
         }
 
         if (now - record.firstRequest > this.windowMs) {
             // Window expired, reset
-            this.store.set(userId, { count: 1, firstRequest: now });
+            this.store.set(key, { count: 1, firstRequest: now });
             return true;
         }
 
         if (record.count >= this.limit) {
-            console.warn(`⚠️ [RateLimiter] User ${userId} exceeded limit (${this.limit}/${this.windowMs}ms)`);
+            console.warn(`⚠️ [RateLimiter] [${accountName}] User ${userId} exceeded limit (${this.limit}/${this.windowMs}ms)`);
             return false;
         }
 
@@ -40,11 +42,10 @@ class RateLimiter {
 
     /**
      * Get seconds remaining until limit reset for a user.
-     * @param {string} userId
-     * @returns {number} Seconds remaining
      */
-    getTimeToReset(userId) {
-        const record = this.store.get(userId);
+    getTimeToReset(accountName, userId) {
+        const key = `${accountName}_${userId}`;
+        const record = this.store.get(key);
         if (!record) return 0;
         const elapsed = Date.now() - record.firstRequest;
         const remaining = Math.max(0, this.windowMs - elapsed);
@@ -53,7 +54,6 @@ class RateLimiter {
 
     /**
      * Clean up old entries to prevent memory leaks.
-     * Should be called periodically.
      */
     cleanup() {
         const now = Date.now();

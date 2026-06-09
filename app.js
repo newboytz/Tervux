@@ -21,7 +21,6 @@ app.use(express.static(path.join(__dirname, "public")));
 
 /**
  * 📊 ENDPOINT: Angalia status ya akaunti maalum
- * Mteja anaweza kupitisha accountName kama query (mfano: /api/status?accountName=temp1)
  */
 app.get("/api/status", (req, res) => {
     const { accountName } = req.query;
@@ -32,9 +31,8 @@ app.get("/api/status", (req, res) => {
 
     const client = whatsappService.getClient(accountName);
     
-    // Kwenye Multi-Account, kila session itakuwa na config yake ndani ya folda lake baadae
-    // Kwa sasa tunavuta config kuu au unaweza kuweka default values
-    const config = getCachedConfig(); 
+    // 🔥 Sasa hivi inavuta config maalum ya huyu mteja pekee!
+    const config = getCachedConfig(accountName); 
 
     res.json({
         accountName: accountName,
@@ -55,8 +53,7 @@ app.get("/api/status", (req, res) => {
 });
 
 /**
- * 📡 ENDPOINT MPYA (MULTI-ACCOUNT): Omba Pairing Code
- * Inapokea phone na accountName kutoka kwenye Dashboard.
+ * 📡 ENDPOINT: Omba Pairing Code (MULTI-ACCOUNT)
  */
 app.post("/api/pairing-code", async (req, res) => {
     let { phone, accountName } = req.body;
@@ -65,20 +62,20 @@ app.post("/api/pairing-code", async (req, res) => {
         return res.status(400).json({ error: "Tafadhali weka namba ya simu na jina la akaunti!" });
     }
 
-    // Safisha accountName isio na herufi za fujo (ruhusu tu herufi, namba na underscore)
+    // Safisha accountName isio na herufi za fujo
     accountName = accountName.replace(/[^a-zA-Z0-9_]/g, '');
     let finalSessionId = accountName;
 
     try {
         console.log(`📡 Ombi jipya la Pairing Code la Member -> Jina: ${accountName}, Namba: ${phone}`);
 
-        // 🔥 KAGUA KAMA JINA LIPO TAYARI (UTALIBADILISHA KIOTOMATIKI LISIGONGANE)
-        let sessionFolder = path.join(__dirname, "auth_info", `session_${finalSessionId}`);
+        // Kagua kama jina lipo tayari lisionganye folda
+        let sessionFolder = path.join(process.cwd(), "auth_info", `session_${finalSessionId}`);
         let counter = 1;
         
         while (fs.existsSync(sessionFolder)) {
             finalSessionId = `${accountName}_${counter}`;
-            sessionFolder = path.join(__dirname, "auth_info", `session_${finalSessionId}`);
+            sessionFolder = path.join(process.cwd(), "auth_info", `session_${finalSessionId}`);
             counter++;
         }
 
@@ -86,13 +83,13 @@ app.post("/api/pairing-code", async (req, res) => {
             console.log(`⚠️ Jina lilikuwa lipo tayari! Limebadilishwa kuwa: ${finalSessionId}`);
         }
 
-        // Tunatuma sasa kwenye WhatsApp Service ili iwashe session hii maalum
-        const code = await whatsappService.createNewSession(finalSessionId, phone);
+        // 🔥 Inaita function sahihi tuliyoiweka kwenye whatsappClient.js kupata kodi direct!
+        const code = await requestPairingCodeFromWeb(finalSessionId, phone);
 
         res.json({ 
             success: true, 
             code: code,
-            accountName: finalSessionId // Tunamrudishia mteja jina lililokubalika
+            accountName: finalSessionId 
         });
     } catch (error) {
         console.error(`❌ Hitilafu ya pairing kwenye akaunti ${accountName}:`, error);
@@ -101,8 +98,7 @@ app.post("/api/pairing-code", async (req, res) => {
 });
 
 /**
- * 🗑️ ENDPOINT MPYA (MULTI-ACCOUNT): Logout na Kufuta Temp
- * Inafuta kabisa folda la siri la huyu mteja pekee ili akirudi isigome
+ * 🗑️ ENDPOINT: Logout na Kufuta Session
  */
 app.post("/api/logout", async (req, res) => {
     const { accountName } = req.body;
@@ -114,16 +110,14 @@ app.post("/api/logout", async (req, res) => {
     try {
         console.log(`🗑️ Ombi la Logout kutoka kwa Member: ${accountName}`);
 
-        // 1. Zima socket ya huyu mteja pekee kutoka kwenye Baileys
-        await whatsappService.logoutSession(accountName); 
+        // 🔥 Inaita function sahihi tuliyoiweka kwenye whatsappService.js
+        await whatsappService.logout(accountName); 
 
-        // 2. Tafuta njia ya kuelekea folda lake maalum la temp
-        const sessionFolder = path.join(__dirname, "auth_info", `session_${accountName}`);
-
-        // 3. Futa folda na ma-creds yake yote mazima!
+        // Tafuta njia ya kuelekea folda lake maalum na kulisafisha kama limebaki
+        const sessionFolder = path.join(process.cwd(), "auth_info", `session_${accountName}`);
         if (fs.existsSync(sessionFolder)) {
             fs.rmSync(sessionFolder, { recursive: true, force: true });
-            console.log(`🧹 Folda la auth_info/session_${accountName} limefutwa kikamilifu.`);
+            console.log(`🧹 Folda la auth_info/session_${accountName} limefutwa kabisa.`);
         }
 
         res.json({ 
@@ -132,7 +126,7 @@ app.post("/api/logout", async (req, res) => {
         });
     } catch (error) {
         console.error(`❌ Hitilafu wakati wa kulogout akaunti ${accountName}:`, error);
-        res.status(500).json({ error: "Imeshindikana kuondoa akaunti na kufuta faili la temp." });
+        res.status(500).json({ error: "Imeshindikana kuondoa akaunti." });
     }
 });
 
@@ -144,7 +138,8 @@ app.post("/api/restart", async (req, res) => {
     if (!accountName) return res.status(400).json({ error: "Weka jina la akaunti!" });
 
     try {
-        await whatsappService.restartSession(accountName);
+        // 🔥 Inaita function sahihi tuliyoiweka kwenye whatsappService.js
+        await whatsappService.restart(accountName);
         res.json({ success: true, message: `Bot ${accountName} inajirestart...` });
     } catch (error) {
         res.status(500).json({ error: "Imeshindikana kurestart bot" });

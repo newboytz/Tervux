@@ -1,31 +1,21 @@
-<!DOCTYPE html>
-<html lang="sw">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tervux Bot Dashboard</title>
-    <style>
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: Arial, sans-serif; display: flex; background: #f4f6f9; }
-        .main-content { flex: 1; display: flex; flex-col; flex-direction: column; height: 100vh; overflow: hidden; }
-        .content-body { flex: 1; overflow-y: auto; padding: 10px; }
-    </style>
-</head>
-<body>
+import { renderSidebar } from './components/Sidebar.js';
+import { renderNavbar } from './components/Navbar.js';
+import { renderStats } from './components/Stats.js';
 
-    <div id="sidebar-container"></div>
+// Kazi ya kuwasha dashboard na kuingiza components zote
+function initDashboard() {
+    // 1. Weka Sidebar
+    document.getElementById('sidebar-container').innerHTML = renderSidebar();
+    
+    // 2. Weka Navbar
+    document.getElementById('navbar-container').innerHTML = renderNavbar("JonniTech");
+    
+    // 3. Weka Stats (Hapa unaweza kuweka data halisi baadae kutoka kwa API)
+    document.getElementById('stats-container').innerHTML = renderStats({
+        clients: 12,
+        ram: "245.5MB"
+    });
+}
 
-    <div class="main-content">
-        <div id="navbar-container"></div>
-
-        <div class="content-body">
-            <h2 style="padding-left: 20px; margin-bottom: 0;">Hali ya Mfumo</h2>
-            <div id="stats-container"></div>
-            
-            </div>
-    </div>
-
-    <script type="module" src="./src/main.js"></script>
-</body>
-</html>
-  
+// Run mambo ya uanzishwaji kivinjari kikimaliza kuload
+window.addEventListener('DOMContentLoaded', initDashboard);

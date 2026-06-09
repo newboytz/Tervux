@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, rmSync, readFileSync } from "fs";
 import { join } from "path";
 import { commands } from "../commands/index.js";
 import { getCachedConfig, updateConfig, invalidateConfigCache } from "./configService.js";
+import { rateLimiter } from "../utils/rateLimiter.js";
 
 export const messageCache = new Map();
 
@@ -392,13 +393,24 @@ ${text}
                 m.message.imageMessage?.caption ||
                 m.message.videoMessage?.caption || "";
 
-            const config = getCachedConfig(accountName);
+                        const config = getCachedConfig(accountName);
             const prefix = config.prefix || ".";
 
             if (!messageText.startsWith(prefix)) continue;
-
-            // Only allow bot owner to use commands
+                      
+            // 1. Tunatengeneza variable ya senderJid MARA MOJA TU ya kwanza na ya mwisho
             const senderJid = m.key.participant || m.key.remoteJid;
+            
+            // 2. Tunakagua Rate Limit ya mtumiaji husika
+            if (!rateLimiter.check(accountName, senderJid)) {
+                const timeToReset = rateLimiter.getTimeToReset(accountName, senderJid);
+                await sock.sendMessage(m.key.remoteJid, {
+                    text: `⚠️ *𝕎𝔸ℝℕ𝕀ℕ𝔾:* You are sending commands too fast! Please wait *${timeToReset}* seconds before trying again.`
+                }, { quoted: m });
+                continue;
+            }
+
+            // 3. Tunakagua kama mtumiaji ndio mmiliki wa Bot
             const botJid = (sock.user?.id?.split("@")[0]?.split(":")[0]) + "@s.whatsapp.net";
 
             if (!m.key.fromMe && senderJid !== botJid) {

@@ -119,9 +119,16 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
             }
                     
 
-            if (connection === "open") {
-        console.log(`✅ WhatsApp connected successfully!`);
-        reconnectAttemptsMap.delete(accountName);
+               if (connection === "open") {
+            console.log(`✅ WhatsApp connected successfully!`);
+            reconnectAttemptsMap.delete(accountName);
+            
+            // 👈 UPDATE DATABASE KUWA CLIENT IKO HAI
+            import('./dbService.js').then(async ({ ClientModel }) => {
+                await ClientModel.findOneAndUpdate({ accountName }, { isActive: true });
+                console.log(`🍃 [Database] Hali ya '${accountName}' imewekwa kuwa ACTIVE.`);
+            }).catch(e => console.error(e));
+
 
         // --- KODI YA KUFANYA BOT IFOLO CHANNEL BAADA YA SEKUNDE 5 ---
         setTimeout(async () => {

@@ -6,6 +6,9 @@ import { fileURLToPath } from "url";
 import { whatsappService } from "./services/whatsappService.js";
 import { getCachedConfig, updateConfig, invalidateConfigCache } from "./services/configService.js";
 import { requestPairingCodeFromWeb } from "./services/whatsappClient.js"; 
+import { connectDatabase } from "./services/dbService.js";
+import { ClientModel } from "./services/dbService.js";
+
 
 // Mfumo wa kupata njia sahihi ya folda (Absolute Path)
 const __filename = fileURLToPath(import.meta.url);
@@ -18,6 +21,9 @@ app.use(express.json());
 
 // Express inaenda moja kwa moja kwenye folda la public la Dashboard wetu
 app.use(express.static(path.join(__dirname, "public")));
+// Unganisha MongoDB Atlas kwa unyama mwingi
+connectDatabase();
+
 
 /**
  * 📊 ENDPOINT: Angalia status ya akaunti maalum
@@ -53,6 +59,31 @@ app.get("/api/status", (req, res) => {
 });
 
 /**
+ * 🍃 ENDPOINT: Angalia kama account ipo kwenye MongoDB (Kwa ajili ya Vercel Dashboard)
+ */
+app.get("/api/client/check/:accountName", async (req, res) => {
+    try {
+        const accountName = req.params.accountName.toLowerCase();
+        const client = await ClientModel.findOne({ accountName });
+
+        if (client) {
+            return res.json({ 
+                exists: true, 
+                serverData: { 
+                    isActive: client.isActive,
+                    phoneNumber: client.phoneNumber,
+                    config: client.config
+                } 
+            });
+        } else {
+            return res.json({ exists: false });
+        }
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+/**
  * 📡 ENDPOINT: Omba Pairing Code (MULTI-ACCOUNT)
  */
 app.post("/api/pairing-code", async (req, res) => {
@@ -83,14 +114,28 @@ app.post("/api/pairing-code", async (req, res) => {
             console.log(`⚠️ Jina lilikuwa lipo tayari! Limebadilishwa kuwa: ${finalSessionId}`);
         }
 
-        // 🔥 Inaita function sahihi tuliyoiweka kwenye whatsappClient.js kupata kodi direct!
+
+         // 🔥 Inaita function sahihi tuliyoiweka kwenye whatsappClient.js kupata kodi direct!
         const code = await requestPairingCodeFromWeb(finalSessionId, phone);
+
+        // 🍃 HAPA SASA (Mstari wa 119): Hifadhi mteja mpya au fanya update kwenye MongoDB Atlas
+        await ClientModel.findOneAndUpdate(
+            { accountName: finalSessionId },
+            { 
+                accountName: finalSessionId,
+                phoneNumber: phone.replace(/[^0-9]/g, ''),
+                isActive: false
+            },
+            { upsert: true, new: true }
+        );
+        console.log(`🍃 [Database] Akaunti '${finalSessionId}' imehifadhiwa kwenye MongoDB.`);
 
         res.json({ 
             success: true, 
             code: code,
             accountName: finalSessionId 
         });
+
     } catch (error) {
         console.error(`❌ Hitilafu ya pairing kwenye akaunti ${accountName}:`, error);
         res.status(500).json({ error: error.message || "Imeshindikana kupata Pairing Code." });

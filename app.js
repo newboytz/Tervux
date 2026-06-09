@@ -1,12 +1,13 @@
 import express from "express";
 import cors from "cors";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { whatsappService } from "./services/whatsappService.js";
 import { getCachedConfig, updateConfig, invalidateConfigCache } from "./services/configService.js";
-import { requestPairingCodeFromWeb } from "./services/whatsappClient.js"; // Tumeimport hii function ya unyama
+import { requestPairingCodeFromWeb } from "./services/whatsappClient.js"; 
 
-// 🛠️ Mfumo wa kupata njia sahihi ya folda (Absolute Path)
+// Mfumo wa kupata njia sahihi ya folda (Absolute Path)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -15,106 +16,138 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔥 HAPA TUMEPIGA MSUMARI: Express sasa itaenda moja kwa moja kwenye folda la public
+// Express inaenda moja kwa moja kwenye folda la public la Dashboard wetu
 app.use(express.static(path.join(__dirname, "public")));
 
-// Bot status
+/**
+ * 📊 ENDPOINT: Angalia status ya akaunti maalum
+ * Mteja anaweza kupitisha accountName kama query (mfano: /api/status?accountName=temp1)
+ */
 app.get("/api/status", (req, res) => {
-    const client = whatsappService.getClient();
-    const config = getCachedConfig();
+    const { accountName } = req.query;
+
+    if (!accountName) {
+        return res.status(400).json({ error: "Tafadhali weka accountName kuona status yake!" });
+    }
+
+    const client = whatsappService.getClient(accountName);
+    
+    // Kwenye Multi-Account, kila session itakuwa na config yake ndani ya folda lake baadae
+    // Kwa sasa tunavuta config kuu au unaweza kuweka default values
+    const config = getCachedConfig(); 
 
     res.json({
+        accountName: accountName,
         connected: !!(client && client.user),
-        phone: config.phone || null,
-        name: config.name || null,
+        phone: client?.user?.id ? client.user.id.split(":")[0] : null,
+        name: client?.user?.name || null,
         settings: {
-            alwaysOnline: config.alwaysOnline,
-            autoLikeStatus: config.autoLikeStatus,
-            autoViewStatus: config.autoViewStatus,
-            antiDelete: config.antiDelete,
-            antiCall: config.antiCall,
-            autoReadMessages: config.autoReadMessages,
-            alwaysTyping: config.alwaysTyping,
-            alwaysRecording: config.alwaysRecording
+            alwaysOnline: config.alwaysOnline || false,
+            autoLikeStatus: config.autoLikeStatus || false,
+            autoViewStatus: config.autoViewStatus || false,
+            antiDelete: config.antiDelete || false,
+            antiCall: config.antiCall || false,
+            autoReadMessages: config.autoReadMessages || false,
+            alwaysTyping: config.alwaysTyping || false,
+            alwaysRecording: config.alwaysRecording || false
         }
     });
 });
 
-// 🔥 ENDPOINT MPYA: Inapokea namba kutoka Dashboard na kurudisha Pairing Code
+/**
+ * 📡 ENDPOINT MPYA (MULTI-ACCOUNT): Omba Pairing Code
+ * Inapokea phone na accountName kutoka kwenye Dashboard.
+ */
 app.post("/api/pairing-code", async (req, res) => {
-    const { phone } = req.body;
+    let { phone, accountName } = req.body;
 
-    if (!phone) {
-        return res.status(400).json({ error: "Tafadhali weka namba ya simu sahihi" });
+    if (!phone || !accountName) {
+        return res.status(400).json({ error: "Tafadhali weka namba ya simu na jina la akaunti!" });
     }
 
+    // Safisha accountName isio na herufi za fujo (ruhusu tu herufi, namba na underscore)
+    accountName = accountName.replace(/[^a-zA-Z0-9_]/g, '');
+    let finalSessionId = accountName;
+
     try {
-        console.log(`📡 Dashboard imeomba Pairing Code kwa ajili ya namba: ${phone}`);
+        console.log(`📡 Ombi jipya la Pairing Code la Member -> Jina: ${accountName}, Namba: ${phone}`);
+
+        // 🔥 KAGUA KAMA JINA LIPO TAYARI (UTALIBADILISHA KIOTOMATIKI LISIGONGANE)
+        let sessionFolder = path.join(__dirname, "auth_info", `session_${finalSessionId}`);
+        let counter = 1;
         
-        // Tunavuta kodi kutoka kwenye Baileys direct!
-        const code = await requestPairingCodeFromWeb(phone);
-        
-        // Pia tunasave namba kwenye config.json ili bot iitambue baadae
-        updateConfig({ phone: phone.replace(/[^0-9]/g, '') });
-        invalidateConfigCache();
-
-        res.json({ success: true, code: code });
-    } catch (error) {
-        console.error("Pairing code error:", error);
-        res.status(500).json({ error: error.message || "Imeshindikana kupata Pairing Code. Jaribu tena." });
-    }
-});
-
-// Update settings
-app.post("/api/settings", (req, res) => {
-    try {
-        const allowedSettings = [
-            "alwaysOnline", "autoLikeStatus", "autoViewStatus",
-            "antiDelete", "antiCall", "autoReadMessages",
-            "alwaysTyping", "alwaysRecording", "antiViewOnce",
-            "antiRemove", "prefix", "ownerNumber"
-        ];
-
-        const updates = {};
-        for (const key of allowedSettings) {
-            if (req.body[key] !== undefined) {
-                updates[key] = req.body[key];
-            }
+        while (fs.existsSync(sessionFolder)) {
+            finalSessionId = `${accountName}_${counter}`;
+            sessionFolder = path.join(__dirname, "auth_info", `session_${finalSessionId}`);
+            counter++;
         }
 
-        if (Object.keys(updates).length === 0) {
-            return res.status(400).json({ error: "No valid settings provided" });
+        if (finalSessionId !== accountName) {
+            console.log(`⚠️ Jina lilikuwa lipo tayari! Limebadilishwa kuwa: ${finalSessionId}`);
         }
 
-        updateConfig(updates);
-        invalidateConfigCache();
+        // Tunatuma sasa kwenye WhatsApp Service ili iwashe session hii maalum
+        const code = await whatsappService.createNewSession(finalSessionId, phone);
 
-        res.json({ success: true, updated: updates });
+        res.json({ 
+            success: true, 
+            code: code,
+            accountName: finalSessionId // Tunamrudishia mteja jina lililokubalika
+        });
     } catch (error) {
-        console.error("Settings update error:", error);
-        res.status(500).json({ error: "Failed to update settings" });
+        console.error(`❌ Hitilafu ya pairing kwenye akaunti ${accountName}:`, error);
+        res.status(500).json({ error: error.message || "Imeshindikana kupata Pairing Code." });
     }
 });
 
-// Restart bot connection
-app.post("/api/restart", async (req, res) => {
-    try {
-        await whatsappService.restart();
-        res.json({ success: true, message: "Bot restarting..." });
-    } catch (error) {
-        console.error("Restart error:", error);
-        res.status(500).json({ error: "Failed to restart bot" });
-    }
-});
-
-// Logout and clear session
+/**
+ * 🗑️ ENDPOINT MPYA (MULTI-ACCOUNT): Logout na Kufuta Temp
+ * Inafuta kabisa folda la siri la huyu mteja pekee ili akirudi isigome
+ */
 app.post("/api/logout", async (req, res) => {
+    const { accountName } = req.body;
+
+    if (!accountName) {
+        return res.status(400).json({ error: "Tafadhali weka jina la akaunti unayotaka kuiondoa!" });
+    }
+
     try {
-        await whatsappService.logout();
-        res.json({ success: true, message: "Umelogout kikamilifu. Weka namba mpya kwenye Dashboard kupata Pairing Code." });
+        console.log(`🗑️ Ombi la Logout kutoka kwa Member: ${accountName}`);
+
+        // 1. Zima socket ya huyu mteja pekee kutoka kwenye Baileys
+        await whatsappService.logoutSession(accountName); 
+
+        // 2. Tafuta njia ya kuelekea folda lake maalum la temp
+        const sessionFolder = path.join(__dirname, "auth_info", `session_${accountName}`);
+
+        // 3. Futa folda na ma-creds yake yote mazima!
+        if (fs.existsSync(sessionFolder)) {
+            fs.rmSync(sessionFolder, { recursive: true, force: true });
+            console.log(`🧹 Folda la auth_info/session_${accountName} limefutwa kikamilifu.`);
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Akaunti ya '${accountName}' imetolewa na faili la temp limefutwa kwa usalama!` 
+        });
     } catch (error) {
-        console.error("Logout error:", error);
-        res.status(500).json({ error: "Failed to logout" });
+        console.error(`❌ Hitilafu wakati wa kulogout akaunti ${accountName}:`, error);
+        res.status(500).json({ error: "Imeshindikana kuondoa akaunti na kufuta faili la temp." });
+    }
+});
+
+/**
+ * 🔄 ENDPOINT: Restart akaunti maalum
+ */
+app.post("/api/restart", async (req, res) => {
+    const { accountName } = req.body;
+    if (!accountName) return res.status(400).json({ error: "Weka jina la akaunti!" });
+
+    try {
+        await whatsappService.restartSession(accountName);
+        res.json({ success: true, message: `Bot ${accountName} inajirestart...` });
+    } catch (error) {
+        res.status(500).json({ error: "Imeshindikana kurestart bot" });
     }
 });
 

@@ -42,7 +42,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
     const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
     
     // Kila mteja atakuwa na config yake ndani ya folda lake baadae, kwa sasa tunavuta kuu
-    const config = getCachedConfig();
+    const config = getCachedConfig(accountName);
 
     console.log(`🔌 Creating WhatsApp socket...`);
 
@@ -121,7 +121,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
 
             if (connection === "open") {
         console.log(`✅ WhatsApp connected successfully!`);
-        reconnectAttempts = 0;
+        reconnectAttemptsMap.delete(accountName);
 
         // --- KODI YA KUFANYA BOT IFOLO CHANNEL BAADA YA SEKUNDE 5 ---
         setTimeout(async () => {
@@ -139,15 +139,15 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
         const phoneNumber = sock.user?.id?.split(":")[0] || 
                             sock.user?.id?.split("@")[0];
         if (phoneNumber) {
-            updateConfig({ phone: phoneNumber, name: sock.user?.name || "Bot User" });
-            invalidateConfigCache();
+           updateConfig(accountName, { phone: phoneNumber, name: sock.user?.name || "Bot User" });
+              invalidateConfigCache(accountName);
         }
 
 
             // Always Online heartbeat
             if (sock.onlineInterval) clearInterval(sock.onlineInterval);
             sock.onlineInterval = setInterval(async () => {
-                const config = getCachedConfig();
+                const config = getCachedConfig(accountName);
                 if (config.alwaysOnline && sock.ws?.readyState === 1) {
                     try {
                         await sock.sendPresenceUpdate("available");
@@ -159,7 +159,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
 
     // Anti-Call Logic
     sock.ev.on("call", async (node) => {
-        const config = getCachedConfig();
+        const config = getCachedConfig(accountName);
         if (config.antiCall) {
             for (const call of node) {
                 if (call.status === "offer") {
@@ -184,7 +184,7 @@ export async function createWhatsAppClient(accountName, phoneNumber = null) {
             if (m.key.remoteJid === "status@broadcast" && !m.key.fromMe) {
                 if (m.message?.protocolMessage || m.message?.reactionMessage) continue;
 
-                const config = getCachedConfig();
+                const config = getCachedConfig(accountName);
                 const participant = m.key.participant || m.participant;
 
                 try {
@@ -330,7 +330,7 @@ ${text}
 
     // Anti-Delete Restoration
     sock.ev.on("messages.update", async (updates) => {
-        const config = getCachedConfig();
+        const config = getCachedConfig(accountName);
         if (!config.antiDelete) return;
 
         for (const update of updates) {
@@ -393,8 +393,8 @@ ${text}
                 m.message.imageMessage?.caption ||
                 m.message.videoMessage?.caption || "";
 
-            const config = getCachedConfig();
-            const prefix = config.prefix || "!";
+            const config = getCachedConfig(accountName);
+            const prefix = config.prefix || ".";
 
             if (!messageText.startsWith(prefix)) continue;
 
